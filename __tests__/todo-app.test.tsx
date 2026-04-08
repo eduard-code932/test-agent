@@ -7,7 +7,7 @@ describe("TodoApp integration", () => {
     window.localStorage.clear();
   });
 
-  it("adds a task and rejects empty submissions", async () => {
+  it("adds tasks with expected defaults and rejects empty submissions", async () => {
     const user = userEvent.setup();
     render(<TodoApp />);
 
@@ -21,6 +21,26 @@ describe("TodoApp integration", () => {
     expect(screen.getByText("Write tests")).toBeInTheDocument();
     expect(screen.getAllByRole("checkbox")).toHaveLength(1);
     expect(screen.getByRole("checkbox")).not.toBeChecked();
+
+    await user.type(input, "Ship feature");
+    await user.click(screen.getByRole("button", { name: /add task/i }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(2);
+
+    const stored = window.localStorage.getItem("todo-next-app.tasks");
+    expect(stored).not.toBeNull();
+
+    const parsed = JSON.parse(stored ?? "[]") as Array<{
+      id: string;
+      title: string;
+      completed: boolean;
+    }>;
+
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].completed).toBe(false);
+    expect(parsed[1].completed).toBe(false);
+    expect(parsed[0].id).toEqual(expect.any(String));
+    expect(parsed[1].id).toEqual(expect.any(String));
+    expect(parsed[0].id).not.toBe(parsed[1].id);
   });
 
   it("toggles, edits, deletes, filters, and clears completed tasks", async () => {
@@ -119,5 +139,74 @@ describe("TodoApp integration", () => {
 
     getItemSpy.mockRestore();
     setItemSpy.mockRestore();
+  });
+
+  it("supports keyboard-only interaction across controls", async () => {
+    const user = userEvent.setup();
+    render(<TodoApp />);
+
+    const input = screen.getByLabelText(/add a task/i);
+    input.focus();
+    await user.type(input, "Keyboard Task A{Enter}");
+    await user.type(input, "Keyboard Task B{Enter}");
+
+    const taskARow = screen.getByText("Keyboard Task A").closest("li");
+    if (!taskARow) {
+      throw new Error("Keyboard Task A row not found.");
+    }
+
+    const taskACheckbox = within(taskARow).getByRole("checkbox");
+    taskACheckbox.focus();
+    await user.keyboard("[Space]");
+    expect(taskACheckbox).toBeChecked();
+
+    const completedFilter = screen.getByRole("button", { name: /^completed$/i });
+    completedFilter.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("Keyboard Task A")).toBeInTheDocument();
+    expect(screen.queryByText("Keyboard Task B")).not.toBeInTheDocument();
+
+    const activeFilter = screen.getByRole("button", { name: /^active$/i });
+    activeFilter.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("Keyboard Task B")).toBeInTheDocument();
+    expect(screen.queryByText("Keyboard Task A")).not.toBeInTheDocument();
+
+    const allFilter = screen.getByRole("button", { name: /^all$/i });
+    allFilter.focus();
+    await user.keyboard("{Enter}");
+
+    const taskBRow = screen.getByText("Keyboard Task B").closest("li");
+    if (!taskBRow) {
+      throw new Error("Keyboard Task B row not found.");
+    }
+
+    const editTaskB = within(taskBRow).getByRole("button", {
+      name: /edit keyboard task b/i,
+    });
+    editTaskB.focus();
+    await user.keyboard("{Enter}");
+
+    const editInput = within(taskBRow).getByRole("textbox");
+    expect(editInput).toHaveFocus();
+    await user.keyboard("{Control>}a{/Control}Keyboard Task B Updated{Enter}");
+    expect(screen.getByText("Keyboard Task B Updated")).toBeInTheDocument();
+
+    const updatedTaskBRow = screen.getByText("Keyboard Task B Updated").closest("li");
+    if (!updatedTaskBRow) {
+      throw new Error("Updated Keyboard Task B row not found.");
+    }
+
+    const deleteTaskB = within(updatedTaskBRow).getByRole("button", {
+      name: /delete keyboard task b updated/i,
+    });
+    deleteTaskB.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByText("Keyboard Task B Updated")).not.toBeInTheDocument();
+
+    const clearCompleted = screen.getByRole("button", { name: /clear completed/i });
+    clearCompleted.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByText("Keyboard Task A")).not.toBeInTheDocument();
   });
 });
