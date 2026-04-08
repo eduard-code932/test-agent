@@ -126,45 +126,48 @@ export function sanitizeStoredTasks(value: unknown): Task[] {
     return [];
   }
 
-  return value
-    .map((item) => {
-      if (!item || typeof item !== "object") {
-        return null;
-      }
+  const sanitizedTasks: Task[] = [];
 
-      const id = "id" in item ? item.id : undefined;
-      const title = "title" in item ? item.title : undefined;
-      const completed = "completed" in item ? item.completed : undefined;
-      const createdAt = "createdAt" in item ? item.createdAt : undefined;
-      const updatedAt = "updatedAt" in item ? item.updatedAt : undefined;
+  for (const item of value) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
 
-      if (
-        typeof id !== "string" ||
-        typeof title !== "string" ||
-        typeof completed !== "boolean" ||
-        typeof createdAt !== "number" ||
-        !Number.isFinite(createdAt)
-      ) {
-        return null;
-      }
+    const id = "id" in item ? item.id : undefined;
+    const title = "title" in item ? item.title : undefined;
+    const completed = "completed" in item ? item.completed : undefined;
+    const createdAt = "createdAt" in item ? item.createdAt : undefined;
+    const updatedAt = "updatedAt" in item ? item.updatedAt : undefined;
 
-      const { trimmedTitle, error } = validateTaskTitle(title);
-      if (error) {
-        return null;
-      }
+    if (
+      typeof id !== "string" ||
+      typeof title !== "string" ||
+      typeof completed !== "boolean" ||
+      typeof createdAt !== "number" ||
+      !Number.isFinite(createdAt)
+    ) {
+      continue;
+    }
 
-      return {
-        id,
-        title: trimmedTitle,
-        completed,
-        createdAt,
-        updatedAt:
-          typeof updatedAt === "number" && Number.isFinite(updatedAt)
-            ? updatedAt
-            : undefined,
-      } satisfies Task;
-    })
-    .filter((task): task is Task => task !== null);
+    const { trimmedTitle, error } = validateTaskTitle(title);
+    if (error) {
+      continue;
+    }
+
+    const sanitizedTask: Task = {
+      id,
+      title: trimmedTitle,
+      completed,
+      createdAt,
+      ...(typeof updatedAt === "number" && Number.isFinite(updatedAt)
+        ? { updatedAt }
+        : {}),
+    };
+
+    sanitizedTasks.push(sanitizedTask);
+  }
+
+  return sanitizedTasks;
 }
 
 function generateTaskId(): string {
